@@ -113,8 +113,8 @@ fun Radar(members: List<Member>, modifier: Modifier = Modifier) {
             }
         }
 
-        RingLabel("Near", Modifier.align(Alignment.Center).offset(y = -(radius * RingFractions[0]) + 10.dp))
-        RingLabel("Far", Modifier.align(Alignment.Center).offset(y = -(radius * RingFractions[2]) + 10.dp))
+        RingLabel("Near", Modifier.align(Alignment.Center).offset(y = -(radius * RingFractions[0]) - 10.dp))
+        RingLabel("Far", Modifier.align(Alignment.Center).offset(y = -(radius * RingFractions[2]) - 10.dp))
 
         // You, in the middle.
         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {

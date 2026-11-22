@@ -35,6 +35,8 @@ data class RadioState(
     val transmitting: Boolean = false,
     val incoming: Incoming? = null,
     val problem: Problem? = null,
+    /** Technical detail for LinkFailed, e.g. "8034 MISSING_PERMISSION_ACCESS_COARSE_LOCATION". */
+    val problemDetail: String? = null,
 ) {
     val connectedCount: Int get() = members.count { it.connected }
     val someoneTalking: Member? get() = members.firstOrNull { it.talking }

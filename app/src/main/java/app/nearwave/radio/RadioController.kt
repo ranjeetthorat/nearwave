@@ -69,6 +69,8 @@ class RadioController(private val context: Context) : LinkManager.Listener {
     private var ticker: Job? = null
     private var talkTimeout: Job? = null
     private var lastBluetoothOn = true
+    @Volatile private var linkFailedAt = 0L
+    private var lastRetryAt = 0L
 
     // ---- Lifecycle -------------------------------------------------------------------------
 
@@ -81,6 +83,7 @@ class RadioController(private val context: Context) : LinkManager.Listener {
 
         val hash = Identity.channelHash(code)
         lastBluetoothOn = beacon.isBluetoothOn
+        linkFailedAt = 0L
         link.start(identity.memberId, name, hash)
         beacon.start(hash, identity.memberId)
         player.start()
@@ -197,8 +200,21 @@ class RadioController(private val context: Context) : LinkManager.Listener {
         }
     }
 
-    override fun onLinkError(message: String) {
-        _state.update { it.copy(problem = Problem.LinkFailed) }
+    override fun onLinkError(what: String, code: Int, detail: String) {
+        linkFailedAt = System.currentTimeMillis()
+        _state.update {
+            it.copy(problem = currentProblem() ?: Problem.LinkFailed, problemDetail = "Could not $what: $code $detail")
+        }
+    }
+
+    /** Restart the Nearby link only (used by Try again and by the automatic retry). */
+    fun retryLink() {
+        val code = identity.channelCode ?: return
+        val name = identity.displayName ?: return
+        if (!_state.value.running) return
+        linkFailedAt = 0L
+        _state.update { it.copy(problem = currentProblem(), problemDetail = null) }
+        link.start(identity.memberId, name, Identity.channelHash(code))
     }
 
     // ---- Radar -----------------------------------------------------------------------------
@@ -238,9 +254,14 @@ class RadioController(private val context: Context) : LinkManager.Listener {
             beacon.start(hash, identity.memberId)
         }
         lastBluetoothOn = bluetoothOn
+        // Retry a failed link every 15 seconds, e.g. after Location is switched on.
+        if (linkFailedAt != 0L && now - lastRetryAt > RETRY_MS) {
+            lastRetryAt = now
+            retryLink()
+        }
         _state.update { s ->
-            val problem = currentProblem() ?: s.problem?.takeIf { it == Problem.LinkFailed && s.connectedCount == 0 }
-            s.copy(problem = problem)
+            val problem = currentProblem() ?: s.problem?.takeIf { it == Problem.LinkFailed && linkFailedAt != 0L }
+            s.copy(problem = problem, problemDetail = if (problem == Problem.LinkFailed) s.problemDetail else null)
         }
         publish()
     }
@@ -248,7 +269,8 @@ class RadioController(private val context: Context) : LinkManager.Listener {
     private fun currentProblem(): Problem? {
         if (!beacon.isBluetoothOn) return Problem.BluetoothOff
         // Before Android 12, Bluetooth scanning only works with the Location switch on.
-        if (Build.VERSION.SDK_INT < 31 && !isLocationOn()) return Problem.LocationOff
+        // Many phones (Xiaomi, Oppo, Vivo...) also need it on for Nearby discovery on newer versions.
+        if (!isLocationOn() && (Build.VERSION.SDK_INT < 31 || linkFailedAt != 0L)) return Problem.LocationOff
         return null
     }
 
@@ -286,6 +308,7 @@ class RadioController(private val context: Context) : LinkManager.Listener {
         private const val TICK_MS = 2_000L
         private const val SIGHTING_STALE_MS = 20_000L
         private const val MAX_LOG = 100
+        private const val RETRY_MS = 15_000L
 
         // Rough bands, tuned for phones in a cabin. Adjust after real-world testing.
         private const val NEAR_DBM = -62.0

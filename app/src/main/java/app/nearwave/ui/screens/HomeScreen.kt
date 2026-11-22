@@ -45,7 +45,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -126,7 +129,7 @@ fun HomeScreen(radio: RadioController, onLeftChannel: () -> Unit) {
                     onAction = { RadioService.start(context) },
                     modifier = Modifier.padding(bottom = Spacing.s),
                 )
-                state.problem != null -> ProblemBanner(state.problem!!, context, onRetry = radio::restart)
+                state.problem != null -> ProblemBanner(state.problem!!, state.problemDetail, context, onRetry = radio::retryLink)
             }
 
             if (incoming != null) {
@@ -241,27 +244,31 @@ private fun StatusLine(state: RadioState, code: String) {
         state.members.isEmpty() -> colors.offline to "Looking for others. They join with code $code."
         else -> colors.offline to "Looking for your channel"
     }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-        Box(Modifier.size(10.dp).clip(CircleShape).background(dot))
-        Spacer(Modifier.width(Spacing.s))
-        Text(text, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
-    }
+    Text(
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = dot)) { append("\u25CF  ") }
+            append(text)
+        },
+        style = MaterialTheme.typography.bodyLarge,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
-private fun ProblemBanner(problem: Problem, context: Context, onRetry: () -> Unit) {
+private fun ProblemBanner(problem: Problem, detail: String?, context: Context, onRetry: () -> Unit) {
     val (icon, title, body) = when (problem) {
         Problem.BluetoothOff -> Triple(
             Icons.Rounded.BluetoothDisabled, "Bluetooth is off",
             "Turn it on to find people nearby. It can stay on in flight mode.",
         )
         Problem.LocationOff -> Triple(
-            Icons.Rounded.LocationOff, "Location is off",
-            "This Android version needs it for Bluetooth scanning. GPS isn't used.",
+            Icons.Rounded.LocationOff, "Turn on Location",
+            "Your phone needs it switched on to find others nearby. Nearwave doesn't use GPS.",
         )
         Problem.LinkFailed -> Triple(
             Icons.Rounded.SyncProblem, "Couldn't start searching",
-            "Try again. If it keeps happening, turn Bluetooth off and on.",
+            "Retrying automatically." + (detail?.let { "\n$it" } ?: ""),
         )
     }
     NoticeBanner(

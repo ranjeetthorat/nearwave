@@ -38,7 +38,8 @@ class LinkManager(context: Context, private val listener: Listener) {
         fun onPeerConnected(peer: PeerInfo)
         fun onPeerDisconnected(memberId: String)
         fun onPacket(memberId: String, packet: Packet)
-        fun onLinkError(message: String)
+        /** [what] is "advertise" or "discover"; [code] is a Nearby status code. */
+        fun onLinkError(what: String, code: Int, detail: String)
     }
 
     private val client = Nearby.getConnectionsClient(context.applicationContext)
@@ -170,7 +171,8 @@ class LinkManager(context: Context, private val listener: Listener) {
             code == ConnectionsStatusCodes.STATUS_ALREADY_DISCOVERING
         ) return
         Log.w(TAG, "$what failed ($code)", error)
-        listener.onLinkError("Could not $what nearby phones ($code)")
+        val name = code?.let { runCatching { ConnectionsStatusCodes.getStatusCodeString(it) }.getOrNull() }
+        listener.onLinkError(what, code ?: -1, name ?: error.message ?: error.javaClass.simpleName)
     }
 
     companion object {
